@@ -86,7 +86,7 @@ if __name__ == '__main__':
 	dif2 = AngleDif(euler1[2],euler2[2])
 	
 
-        if(dif1 >= 1.3 or dif2 >= 0.8):
+        if(dif1 >= 1.7 or dif2 >= 0.8):
 	    data=(position,quaternion)
             WriteFile(position, quaternion)
             PrintArrow(data)
@@ -100,8 +100,15 @@ if __name__ == '__main__':
             qu_z = quaternion[2]
             qu_w = quaternion[3]
 
+    listener.waitForTransform("map", "base_link", now, rospy.Duration(4.0))
+    position, quaternion = listener.lookupTransform("map", "base_link", now)
+    x=position[0]
+    y=position[1]
+    z=quaternion[2]
+    w=quaternion[3]
+
     file=open(sys.argv[1], 'a')
-    file.write("\n]")
+    file.write("\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]" .format(x,y,z,w))
     file.close()
 
     rospy.spin()
