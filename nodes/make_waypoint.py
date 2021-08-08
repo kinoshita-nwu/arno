@@ -13,14 +13,14 @@ from geometry_msgs.msg import PoseArray,Pose
 make_waypoints = PoseArray()
 
 def PrintArrow(pos,qu):
-    global counter
-
     pub = rospy.Publisher("make_waypoints", PoseArray, queue_size = 10)
+
     pose = Pose()
     pose.position.x = pos[0]
     pose.position.y = pos[1]
     pose.orientation.z = qu[2]
     pose.orientation.w = qu[3]
+	
     make_waypoints.header.frame_id = "map"
     make_waypoints.poses.append(pose)
     pub.publish(make_waypoints)
@@ -96,6 +96,7 @@ if __name__ == '__main__':
 
     listener.waitForTransform("map", "base_link", now, rospy.Duration(4.0))
     position, quaternion = listener.lookupTransform("map", "base_link", now)
+	
     x=position[0]
     y=position[1]
     z=quaternion[2]
