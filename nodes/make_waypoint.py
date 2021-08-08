@@ -82,7 +82,6 @@ if __name__ == '__main__':
 	
 
         if(dif1 >= 10.0 or dif2 >= 1.2):
-	    data=(position,quaternion)
             WriteFile(position, quaternion)
             PrintArrow(position,quaternion)
            
