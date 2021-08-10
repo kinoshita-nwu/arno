@@ -2,28 +2,78 @@
 # _*_ coding: utf-8 _*_
 
 import rospy
-import os
-import math
-import sys
 import tf
+import os
+import sys
+import math
 from nav_msgs.msg import Odometry
-from visualization_msgs.msg import Marker
-from geometry_msgs.msg import PoseArray,Pose
+from geometry_msgs.msg import PoseArray, Pose
+from visualization_msgs.msg import MarkerArray, Marker
 
-make_waypoints = PoseArray()
+make_waypoints_out = PoseArray()
+make_waypoints_in = PoseArray()
+make_numbers = MarkerArray()
+counter = 0
 
-def PrintArrow(pos,qu):
-    pub = rospy.Publisher("make_waypoints", PoseArray, queue_size = 10)
+def PrintArrow(pos,qu,dif):
+    global counter
+    
+    if dif >= 10.0 :
+    	pub = rospy.Publisher("make_waypoints_out", PoseArray, queue_size = 10)
+    	pose = Pose()
+    	pose.position.x = pos[0]
+    	pose.position.y = pos[1]
+    	pose.orientation.z = qu[2]
+    	pose.orientation.w = qu[3]
 
-    pose = Pose()
-    pose.position.x = pos[0]
-    pose.position.y = pos[1]
-    pose.orientation.z = qu[2]
-    pose.orientation.w = qu[3]
-	
-    make_waypoints.header.frame_id = "map"
-    make_waypoints.poses.append(pose)
-    pub.publish(make_waypoints)
+    	make_waypoints_out.header.frame_id = "map"
+    	make_waypoints_out.poses.append(pose)
+   	pub.publish(make_waypoints_out)
+
+    else :
+	pub = rospy.Publisher("make_waypoints_in", PoseArray, queue_size = 10)
+    	pose = Pose()
+    	pose.position.x = pos[0]
+    	pose.position.y = pos[1]
+    	pose.orientation.z = qu[2]
+    	pose.orientation.w = qu[3]
+
+    	make_waypoints_in.header.frame_id = "map"
+    	make_waypoints_in.poses.append(pose)
+   	pub.publish(make_waypoints_in)
+
+    num = rospy.Publisher("make_numbers", MarkerArray, queue_size = 10)
+    marker_data = Marker()
+    marker_data.header.frame_id = "map"
+    marker_data.header.stamp = rospy.Time.now()
+
+    marker_data.ns = "basic_shapes"
+    marker_data.id = counter
+
+    marker_data.action = Marker.ADD
+    
+    marker_data.pose.position.x = pos[0]
+    marker_data.pose.position.y = pos[1]
+    marker_data.pose.orientation.z = qu[2]
+    marker_data.pose.orientation.w = qu[3]
+    marker_data.text = str(counter)
+
+    marker_data.color.a = 1.0
+    marker_data.color.r = 1.0
+    marker_data.color.g = 0.1
+    marker_data.color.b = 0.5
+
+    if dif <= 9.0 :
+    	marker_data.scale.z = 0.5
+    else :
+	marker_data.scale.z = 2.0
+
+    marker_data.lifetime = rospy.Duration()
+    marker_data.type = Marker.TEXT_VIEW_FACING
+
+    make_numbers.markers.append(marker_data)
+    num.publish(make_numbers)
+    counter +=1
 
 def WriteFile(pos, qu):
     x = pos[0]
@@ -31,7 +81,7 @@ def WriteFile(pos, qu):
     z = qu[2]
     w = qu[3]
    
-    file=open(sys.argv[1], 'a')
+    file=open(sys.argv[1]+'_waypoint.json', 'a')
     file.write("\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]],".format(x,y,z,w))
     file.close()
 
@@ -43,32 +93,65 @@ def AngleDif(target, current):
         diff += 2 * math.pi
     return abs(diff)
 
+def Question():
+    if (len(sys.argv) < 2):
+        print("Usage " + sys.argv[0] + " fileName ")
+        quit()
+
+    os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide')
+    path = sys.argv[1]+'_waypoint.json'
+    is_file = os.path.isfile(path)
+
+    for i in range(3):
+    	if is_file:
+        	answer1 = raw_input(sys.argv[1]+"_waypoint.jsonを上書きしますか？ (y/n):")
+        	if answer1 == 'y' :
+			break
+		elif answer1 == 'n' :
+			quit()
+
+    for i in range(3):
+    	answer2 = raw_input("屋外で作成しますか？ (y/n):")
+	if answer2 == 'y' :
+	        Dif1 = 10.0
+		Dif2 = 1.2
+		break
+	elif answer2 == 'n' :
+		Dif1 = 1.0
+		Dif2 = 0.4
+		break
+    if answer2 != 'n' :
+        Dif1 = 10.0
+	Dif2 = 1.2
+
+    print("\n[start make_waypoint] dif1 = {0} , dif2 = {1}".format(Dif1,Dif2))
+    return (Dif1,Dif2)
+
 if __name__ == '__main__':
     rospy.init_node('arno_position')
     listener = tf.TransformListener()
     listener.waitForTransform("map", "base_link", rospy.Time(), rospy.Duration(4.0))
 
-    if (len(sys.argv) < 2):
-        print("Usage " + sys.argv[0] + " fileName_waypoint.json")
-        quit()
+    Dif1, Dif2 = Question()
 
-    path = sys.argv[1]
-    is_file = os.path.isfile(path)
-    if is_file:
-        answer = raw_input(sys.argv[1]+"を上書きしますか？\n(yes/no):")
-        if answer == 'no' :
-		quit()
-
-    pos_x = -20 
-    pos_y = -20 
-    qu_x = 0
-    qu_y = 0
-    qu_z = 0
-    qu_w = 0
-
-    file=open(sys.argv[1], 'w')
+    file=open(sys.argv[1]+'_waypoint.json', 'w')
     file.write("[")
     file.close()
+
+    now = rospy.Time.now()
+    listener.waitForTransform("map", "base_link", now, rospy.Duration(4.0))
+    position, quaternion = listener.lookupTransform("map", "base_link", now)
+    
+    pos_x = position[0] 
+    pos_y = position[1]
+    qu_x = quaternion[0]
+    qu_y = quaternion[1]
+    qu_z = quaternion[2]
+    qu_w = quaternion[3]
+
+    WriteFile(position, quaternion)
+    PrintArrow(position,quaternion,Dif1)
+    print([position[0],position[1],0.0],[0.0,0.0,quaternion[2],quaternion[3]])
 
     while not rospy.is_shutdown():
         now = rospy.Time.now()
@@ -79,11 +162,10 @@ if __name__ == '__main__':
 	euler1 = tf.transformations.euler_from_quaternion((quaternion[0],quaternion[1],quaternion[2],quaternion[3]))
 	euler2 = tf.transformations.euler_from_quaternion((qu_x,qu_y,qu_z,qu_w))
 	dif2 = AngleDif(euler1[2],euler2[2])
-	
 
-        if(dif1 >= 10.0 or dif2 >= 1.2):
+        if(dif1 >= Dif1 or dif2 >= Dif2):
             WriteFile(position, quaternion)
-            PrintArrow(position,quaternion)
+            PrintArrow(position,quaternion,Dif1)
            
             print([position[0],position[1],0.0],[0.0,0.0,quaternion[2],quaternion[3]])
 
@@ -96,13 +178,12 @@ if __name__ == '__main__':
 
     listener.waitForTransform("map", "base_link", now, rospy.Duration(4.0))
     position, quaternion = listener.lookupTransform("map", "base_link", now)
-	
     x=position[0]
     y=position[1]
     z=quaternion[2]
     w=quaternion[3]
 
-    file=open(sys.argv[1], 'a')
+    file=open(sys.argv[1]+'_waypoint.json', 'a')
     file.write("\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]" .format(x,y,z,w))
     file.close()
 
