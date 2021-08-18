@@ -3,7 +3,6 @@
 import rospy
 import actionlib
 import tf
-import os
 import sys
 from nav_msgs.msg import Odometry
 import math
@@ -52,7 +51,6 @@ def angle_dif(target, current):
     return abs(diff)
 
 if __name__ == '__main__':
-    #os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide')
     rospy.init_node('arno_navigation')
     pub = rospy.Publisher('waypoints', PoseArray, queue_size=10)
     yo_tolerance = rospy.get_param('move_base/DWAPlannerROS/yaw_goal_tolerance')
@@ -64,7 +62,7 @@ if __name__ == '__main__':
         print("Usage " + sys.argv[0] + " fileName_1 filename_2 ..... filename_N")
         quit()
 
-    load_file(argvs[1])
+    load_file(argvs[1]+'waypoint.json')
     listener = tf.TransformListener()
 
     client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
@@ -74,7 +72,7 @@ if __name__ == '__main__':
 
     for i in range(argc-1):
         if len(waypoints.poses) == 0 :
-            load_file(argvs[i+1])
+            load_file(argvs[i+1]+'waypoint.json')
 	    rospy.sleep(2.0)   
     
 	for i in range(len(waypoints.poses)):
