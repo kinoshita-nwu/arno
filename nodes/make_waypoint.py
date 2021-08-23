@@ -149,8 +149,6 @@ def Question():
 if __name__ == '__main__':
     rospy.init_node('arno_position')
     listener = tf.TransformListener()
-    listener.waitForTransform("map", "base_link", rospy.Time(), rospy.Duration(4.0))
-
     Dif1, Dif2 = Question()
 
     file=open(sys.argv[1]+'_waypoint.json', 'w')
@@ -185,7 +183,6 @@ if __name__ == '__main__':
        	if(dif1 >= Dif1 or dif2 >= Dif2):
 		WriteFile(position, quaternion)
 		PrintArrow(position,quaternion,Dif1)
-        	   
 		print([position[0],position[1],0.0],[0.0,0.0,quaternion[2],quaternion[3]])
 	
 		pos_x = position[0]
