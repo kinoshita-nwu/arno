@@ -12,7 +12,9 @@ from visualization_msgs.msg import Marker ,MarkerArray
 from geometry_msgs.msg import PoseArray, Pose, PoseWithCovarianceStamped
 from move_base_msgs.msg import MoveBaseActionGoal
 
-q = 1.4
+q = 0
+q1 = 0
+q2 = 0
 count = 0
 state = None
 start = Pose()
@@ -169,6 +171,8 @@ def Init_XY():
 
 def ChangeState():
    global q
+   global q1
+   global q2
    global state
    global passpoint
    global x_y
@@ -180,9 +184,8 @@ def ChangeState():
    s_xy = x_y[4]
    s_st = None
    p = state
-   q = float(q)
-   r = 0.8 * q
    
+
    if len(passpoint.poses) == 0:
       return 1
    print(count)
@@ -200,21 +203,21 @@ def ChangeState():
      elif t_st == "left" :
         x1 -= q
      elif t_st == "up" :
-        y1 += q
+        y1 += q1
      elif t_st == "down" :
-        y1 -= q
+        y1 -= q1
      elif t_st == "upper_right" :
-        x1 += r
-        y1 += r
+        x1 += q2
+        y1 += q2
      elif t_st == "lower_right" :
-        x1 += r
-        y1 -= r
+        x1 += q2
+        y1 -= q2
      elif t_st == "upper_left" :
-        x1 -= r
-        y1 += r
+        x1 -= q2
+        y1 += q2
      elif t_st == "lower_left":
-        x1 -= r
-        y1 -= r  
+        x1 -= q2
+        y1 -= q2  
      
      t_xy = math.sqrt(((x_y[2]-x1)**2)+((x_y[3]-y1)**2))
      print("  {0} {1} [{2},{3},0.0]" .format(t_st,t_xy,x1,y1))
@@ -230,7 +233,7 @@ def ChangeState():
       if s_st == None :
          print("re 1")
 	 return 1
-         if t_xy <= q*2 :
+         if t_xy <= q :
             state = s_st
    	    x_y[0] = s_x1
    	    x_y[1] = s_y1
@@ -247,7 +250,7 @@ def ChangeState():
 	 passpoint.poses.pop(0)
          return 2
       else:
-      	 if t_xy <= q*2 :
+      	 if t_xy <= q :
             state = s_st
    	    x_y[0] = s_x1
    	    x_y[1] = s_y1
@@ -316,6 +319,9 @@ def ChangeAngle(p_state):
    start.orientation.w = quaternion[3]
 
 def SetUp():
+   global q
+   global q1
+   global q2
    global state
    
    if (len(sys.argv) < 2):
@@ -328,7 +334,19 @@ def SetUp():
    file=open(sys.argv[1]+'_waypoint.json', 'w')
    file.write("[")
    file.close()
-  
+
+   Q=raw_input('in or out?')
+   if Q == 'in':
+	q = 1.9
+        q1 = 0.7 * q
+        q2 = 0.65 * q
+   elif Q == 'out':
+	q = 2.3
+        q1 = 0.9 * q
+        q2 = 0.65 * q
+   else :
+	quit()
+   print('Make "Passpoints" with [2DNavGoal]')
    rospy.sleep(2.0)
    print('Put [Enter] to start')
    rospy.Subscriber('/move_base/goal',MoveBaseActionGoal,PassCallback)
