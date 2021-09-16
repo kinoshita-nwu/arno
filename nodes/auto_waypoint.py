@@ -23,6 +23,8 @@ passpoint = PoseArray()
 waypoint = PoseArray()
 label = MarkerArray()
 x_y = [0,0,0,0,0]
+map_xy = []
+rows = []
 
 def PassCallback(data):
    global passpoint
@@ -40,6 +42,30 @@ def PassCallback(data):
    passpoint.header.frame_id = "map"
    passpoint.poses.append(pose)
    pub.publish(passpoint)
+
+def MapCallback(msg):
+   global start
+   global map_xy
+   global rows
+
+   row = []
+   count = 0
+   data = msg.data
+   width = msg.info.width
+   height = msg.info.height
+
+   map_xy.append(msg.info.origin.position.x)
+   map_xy.append(msg.info.origin.position.y)
+  
+   for i in range(height):
+   	for i in range(width):
+   		row.append(data[count]) 
+		count += 1
+   	rows.append(row)
+        row = []
+
+   #print(rows)
+   #print(map_xy)
 
 def GoalPose():
    global goal
@@ -218,7 +244,12 @@ def ChangeState():
      elif t_st == "lower_left":
         x1 -= q2
         y1 -= q2  
-     
+  
+     om = OccupancyMap(x1,y1)
+     if om == 1 :
+	counter +=1
+	continue
+
      t_xy = math.sqrt(((x_y[2]-x1)**2)+((x_y[3]-y1)**2))
      print("  {0} {1} [{2},{3},0.0]" .format(t_st,t_xy,x1,y1))
      if t_xy < s_xy :
@@ -268,6 +299,19 @@ def ChangeState():
    	    ChangeAngle(p)
 
    return 0
+
+def OccupancyMap(x,y):
+   global map_xy
+   global rows
+
+   x = 20*int(math.sqrt((x-map_xy[0])**2))
+   y = 20*int(math.sqrt((y-map_xy[1])**2))
+
+   print('x={0},y={1},data={2}' .format(x,y,rows[x][y]))
+   if rows[x][y] == 0:
+	return 0
+   elif  rows[y][x] == 100 or rows[y][x] == -1:
+	return 1
 
 def ChangeAngle(p_state):
    global state
@@ -331,11 +375,15 @@ def SetUp():
 
    os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide')
 
+   rospy.Subscriber('/map', OccupancyGrid,MapCallback)
+   rospy.sleep(3.0)
+
    file=open(sys.argv[1]+'_waypoint.json', 'w')
    file.write("[")
    file.close()
 
-   Q=raw_input('in or out?')
+   print('\007')
+   Q=raw_input('in or out? ')
    if Q == 'in':
 	q = 1.9
         q1 = 0.7 * q
@@ -346,9 +394,9 @@ def SetUp():
         q2 = 0.65 * q
    else :
 	quit()
-   print('Make "Passpoints" with [2DNavGoal]')
+   print('Make "Passpoints and Goal" with [2DNavGoal]')
    rospy.sleep(2.0)
-   print('Put [Enter] to start')
+   print('Put [Enter] to start "make waypoints"')
    rospy.Subscriber('/move_base/goal',MoveBaseActionGoal,PassCallback)
    rospy.sleep(0.1)
 
@@ -365,6 +413,7 @@ if __name__ == '__main__':
    listener = tf.TransformListener()
    listener.waitForTransform("map", "base_link", rospy.Time(), rospy.Duration(4.0))
    
+   print('wait.....')
    SetUp()
 
    now = rospy.Time.now()
