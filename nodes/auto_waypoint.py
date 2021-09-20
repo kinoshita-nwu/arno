@@ -9,7 +9,7 @@ import math
 import json
 from nav_msgs.msg import Odometry,OccupancyGrid
 from visualization_msgs.msg import Marker ,MarkerArray
-from geometry_msgs.msg import PoseArray, Pose, PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseArray, Pose
 from move_base_msgs.msg import MoveBaseActionGoal
 
 q = 0
@@ -17,20 +17,23 @@ q1 = 0
 q2 = 0
 count = 0
 state = None
+map_state = 'unknown'
 start = Pose()
 goal = Pose()
 passpoint = PoseArray()
 waypoint = PoseArray()
 label = MarkerArray()
-x_y = [0,0,0,0,0]
-map_xy = []
-rows = []
+x_y = [0,0,0,0,0] 
+map_xy = [] 
+rows = [] 
 
 def PassCallback(data):
    global passpoint
 
    pub = rospy.Publisher("passpoint", PoseArray, queue_size = 10)
    pose = Pose()
+
+   passpoint.header.frame_id = "map"
    pose.position.x = data.goal.target_pose.pose.position.x
    pose.position.y = data.goal.target_pose.pose.position.y
    pose.orientation.z = data.goal.target_pose.pose.orientation.z
@@ -39,33 +42,29 @@ def PassCallback(data):
    print("[[{0},{1},0.0],[0.0,0.0,{2},{3}]]" 
 	.format(pose.position.x,pose.position.y,pose.orientation.z,pose.orientation.w))
 
-   passpoint.header.frame_id = "map"
    passpoint.poses.append(pose)
    pub.publish(passpoint)
 
 def MapCallback(msg):
-   global start
    global map_xy
    global rows
-
-   row = []
+   
    count = 0
-   data = msg.data
-   width = msg.info.width
-   height = msg.info.height
+   row = []
 
-   map_xy.append(msg.info.origin.position.x)
+   data = msg.data 
+   width = msg.info.width 
+   height = msg.info.height 
+	
+   map_xy.append(msg.info.origin.position.x) 
    map_xy.append(msg.info.origin.position.y)
   
    for i in range(height):
    	for i in range(width):
-   		row.append(data[count]) 
+   		row.append(data[count])
 		count += 1
    	rows.append(row)
         row = []
-
-   #print(rows)
-   #print(map_xy)
 
 def GoalPose():
    global goal
@@ -89,7 +88,6 @@ def StartPose():
    start.orientation.w = pose.orientation.w
 
 def WaypointPose():
-   global count
    global state
    global start
    global waypoint
@@ -97,15 +95,15 @@ def WaypointPose():
 
    pub = rospy.Publisher("waypoint", PoseArray, queue_size = 10)
    pose = Pose()
+	
+   waypoint.header.frame_id = "map"
    pose.position.x = x_y[0]
    pose.position.y = x_y[1]
    pose.orientation.z = start.orientation.z
    pose.orientation.w = start.orientation.w
    
-   print("{0}:[[{1},{2},0.0],[0.0,0.0,{3},{4}]]\n" 
-	.format(state,pose.position.x,pose.position.y,pose.orientation.z,pose.orientation.w))
+   print("\nwaypoint {0}\n   {1}" .format(count,state))
 
-   waypoint.header.frame_id = "map"
    waypoint.poses.append(pose)
    pub.publish(waypoint)
 
@@ -119,6 +117,7 @@ def ArrowLabel():
    
    pub = rospy.Publisher("label", MarkerArray, queue_size = 10)
    marker_data = Marker()
+
    marker_data.header.frame_id = "map"
    marker_data.header.stamp = rospy.Time.now()  
    
@@ -195,136 +194,145 @@ def Init_XY():
       x_y[3] = passpoint.poses[0].position.y
    x_y[4] = math.sqrt(((x_y[2]-x_y[0])**2)+((x_y[3]-x_y[1])**2))
 
-def ChangeState():
+def Calculation_XY():
    global q
    global q1
    global q2
-   global state
-   global passpoint
    global x_y
+   global map_state
 
+   unknown = 0
    t_state = ["right","left","up","down","upper_right","upper_left","lower_right","lower_left"]
-   counter = 0
-   s_x1 = 0
-   s_y1 = 0
-   s_xy = x_y[4]
-   s_st = None
-   p = state
-   
-
-   if len(passpoint.poses) == 0:
-      return 1
-   print(count)
+   xy_list = []
+   x_list = []
+   y_list = []
+   state_list = []
+   lists = []
+	
+   print('--------------------------------------------------------------')
 
    for i in range(8):
-     t_st = t_state[counter]
-
      x1 = x_y[0]
      y1 = x_y[1]
      x2 = x_y[2]
      y2 = x_y[3]
        
-     if t_st == "right" :
+     if t_state[i] == "right" :
         x1 += q
-     elif t_st == "left" :
+     elif t_state[i] == "left" :
         x1 -= q
-     elif t_st == "up" :
+     elif t_state[i] == "up" :
         y1 += q1
-     elif t_st == "down" :
+     elif t_state[i] == "down" :
         y1 -= q1
-     elif t_st == "upper_right" :
+     elif t_state[i] == "upper_right" :
         x1 += q2
         y1 += q2
-     elif t_st == "lower_right" :
+     elif t_state[i] == "lower_right" :
         x1 += q2
         y1 -= q2
-     elif t_st == "upper_left" :
+     elif t_state[i] == "upper_left" :
         x1 -= q2
         y1 += q2
-     elif t_st == "lower_left":
+     elif t_state[i] == "lower_left":
         x1 -= q2
         y1 -= q2  
   
-     om = OccupancyMap(x1,y1)
-     if om == 1 :
-	counter +=1
-	continue
-
-     t_xy = math.sqrt(((x_y[2]-x1)**2)+((x_y[3]-y1)**2))
-     print("  {0} {1} [{2},{3},0.0]" .format(t_st,t_xy,x1,y1))
-     if t_xy < s_xy :
-	s_xy = t_xy
-	s_st = t_st
-	s_x1 = x1
-	s_y1 = y1
-
-     counter +=1
+     print(' {0}' .format(t_state[i]))
 	
-   if goal.position.x == x_y[0] :
-      if s_st == None :
-         print("re 1")
-	 return 1
-         if t_xy <= q :
-            state = s_st
-   	    x_y[0] = s_x1
-   	    x_y[1] = s_y1
-   	    ChangeAngle(p)
-            print("re -1")
-	    return -1
-         else:
-	    state = s_st
-   	    x_y[0] = s_x1
-   	    x_y[1] = s_y1
-   	    ChangeAngle(p)
-   else :
-      if s_st == None :
-	 passpoint.poses.pop(0)
-         return 2
-      else:
-      	 if t_xy <= q :
-            state = s_st
-   	    x_y[0] = s_x1
-   	    x_y[1] = s_y1
-   	    ChangeAngle(p)
-	    WaypointPose()
-	    WriteFile()
-            StartPose()
-	    ArrowLabel()
-            passpoint.poses.pop(0)
-            return 2
-	 else :
-	    state = s_st
-   	    x_y[0] = s_x1
-   	    x_y[1] = s_y1
-   	    ChangeAngle(p)
+     OccupancyMap(x1,y1)
+     if map_state != 'free' :
+        unknown += 1
+        if unknown == 7:
+           print('--------------------------------------------------------------')
+           print('All unknown!!')
+	   quit()
+        continue
+     
+     xy = math.sqrt(((x_y[2]-x1)**2)+((x_y[3]-y1)**2))
+     xy_list.append(xy)
+     x_list.append(x1)
+     y_list.append(y1)
+     state_list.append(t_state[i])
+     lists.append([state_list,x_list,y_list,xy_list])
 
-   return 0
+     print("  (x,y,z)=({0},{1},0.0)  dis={2}" .format(x1,y1,xy))
+	
+   ChangeState(lists)
 
 def OccupancyMap(x,y):
    global map_xy
    global rows
+   global map_state
 
-   x = 20*int(math.sqrt((x-map_xy[0])**2))
-   y = 20*int(math.sqrt((y-map_xy[1])**2))
+   x = int(20*math.sqrt((x-map_xy[0])**2))
+   y = int(20*math.sqrt((y-map_xy[1])**2))
 
-   print('x={0},y={1},data={2}' .format(x,y,rows[x][y]))
-   if rows[x][y] == 0:
-	return 0
-   elif  rows[y][x] == 100 or rows[y][x] == -1:
-	return 1
+   if rows[y][x] == 0:
+	map_state = 'free'
+   elif  rows[y][x] == 100 :
+	map_state = 'occupancy'
+
+   print('  Grid(width,height)=({0},{1}) {2}' .format(x,y,map_state))
+
+def ChangeState(lists):
+   global q
+   global state
+   global passpoint
+   global x_y
+	
+   p = state 
+
+   for i in lists:
+   	x_y[4] = min(i[3]) 
+   	state = i[0][i[3].index(min(i[3]))] 
+   	x_y[0] = i[1][i[3].index(min(i[3]))]
+   	x_y[1] = i[2][i[3].index(min(i[3]))]
+    
+   Update(p)
+      
+   if x_y[4] <= q : 
+      print('xy <= q : {0} <= {1}\n'.format(x_y[4],q))
+      if len(passpoint.poses) == 1 :
+	 print('--------------------------------------------------------------')
+	 print('\nGoal\n  (x,y,z)=({0},{1},0.0)\n  (x,y,w,z)=(0.0,0.0,{2},{3})\n'
+	.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
+   
+         file=open(sys.argv[1]+'_waypoint.json', 'a')
+         file.write("\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]" 
+	.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
+         file.close()
+
+         print("Save "+sys.argv[1]+"_waypoint.json.....")
+         quit()
+      else : 
+         passpoint.poses.pop(0)
+	 print('--------------------------------------------------------------')
+         print('\nNext !!!!!!!!!!!\n')
+   else :
+         print('   xy > q : {0} > {1}\n' .format(x_y[4],q))
+
+def Update(p) :
+   ChangeAngle(p)
+   WaypointPose() 
+   WriteFile()
+   StartPose() 
+   ArrowLabel()
 
 def ChangeAngle(p_state):
    global state
    global start
    global x_y
 
-   quaternion = start.orientation
-   euler = tf.transformations.euler_from_quaternion((quaternion.x, quaternion.y, quaternion.z, quaternion.w))
-   
    angle = 0
    p_angle = 0
 
-   if p_state == "left" :
+   quaternion = start.orientation
+   euler = tf.transformations.euler_from_quaternion((quaternion.x, quaternion.y, quaternion.z, quaternion.w))
+
+   if p_state == "right" :
+        p_angle = 0
+   elif p_state == "left" :
         p_angle = 1
    elif p_state == "up" :
         p_angle = -0.5
@@ -340,8 +348,10 @@ def ChangeAngle(p_state):
         p_angle = 0.75 
 
    p = p_angle * math.pi 
-
-   if state == "left" :
+   
+   if state == "right" :
+        angle = 0
+   elif state == "left" :
         angle = 1
    elif state == "up" :
         angle = 0.5
@@ -383,17 +393,11 @@ def SetUp():
    file.close()
 
    print('\007')
-   Q=raw_input('in or out? ')
-   if Q == 'in':
-	q = 1.9
-        q1 = 0.7 * q
-        q2 = 0.65 * q
-   elif Q == 'out':
-	q = 2.3
-        q1 = 0.9 * q
-        q2 = 0.65 * q
-   else :
-	quit()
+
+   q = 1.7
+   q1 = 0.7 * q
+   q2 = 0.65 * q
+	
    print('Make "Passpoints and Goal" with [2DNavGoal]')
    rospy.sleep(2.0)
    print('Put [Enter] to start "make waypoints"')
@@ -403,10 +407,10 @@ def SetUp():
    end = raw_input()
    if not end:
         state = "goal"
-	GoalPose()
+	GoalPose() 
    else :
-	quit()
-   ArrowLabel()
+	quit() 
+   ArrowLabel() 
    
 if __name__ == '__main__':
    rospy.init_node('auto_waypoint')
@@ -426,33 +430,13 @@ if __name__ == '__main__':
    start.orientation.z = quaternion[2]
    start.orientation.w = quaternion[3]
 
-   ArrowLabel()
-   WriteFile()
+   ArrowLabel() 
+   WriteFile() 
    
-   print("\nStart:[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n"
+   print("\nStart\n  (x,y,z)=({0},{1},0.0)\n  (x,y,w,z)=(0.0,0.0,{2},{3})\n"
          .format(start.position.x,start.position.y,start.orientation.z,start.orientation.w))
    
    while not rospy.is_shutdown() :
       Init_XY()
-      re = ChangeState()
-      if re== 1 :
-         break  
-      if re == 2 :
-	 continue
-      WaypointPose()
-      WriteFile()
-      StartPose()
-      ArrowLabel()
+      Calculation_XY()
       rospy.sleep(1.0)
-      if re == -1 :
-         break  
-
-   print("Goal:[[{0},{1},0.0],[0.0,0.0,{2},{3}]]]" 
-	.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
-   
-   file=open(sys.argv[1]+'_waypoint.json', 'a')
-   file.write("\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]" 
-	.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
-   file.close()
-
-   print("Save "+sys.argv[1]+"_waypoint.json.....")
