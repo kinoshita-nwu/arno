@@ -13,19 +13,20 @@ from geometry_msgs.msg import PoseArray, Pose
 from move_base_msgs.msg import MoveBaseActionGoal
 
 q = 0
-q1 = 0
-q2 = 0
+grid = 0
+free = 0
+occupancy = 0
 count = 0
 state = None
-map_state = 'unknown'
+map_state = None
+rows = []
+map_xy = []
+x_y = [0,0,0,0,0]
 start = Pose()
 goal = Pose()
 passpoint = PoseArray()
 waypoint = PoseArray()
 label = MarkerArray()
-x_y = [0,0,0,0,0] 
-map_xy = [] 
-rows = [] 
 
 def PassCallback(data):
    global passpoint
@@ -52,11 +53,11 @@ def MapCallback(msg):
    count = 0
    row = []
 
-   data = msg.data 
-   width = msg.info.width 
-   height = msg.info.height 
+   data = msg.data
+   width = msg.info.width
+   height = msg.info.height
 	
-   map_xy.append(msg.info.origin.position.x) 
+   map_xy.append(msg.info.origin.position.x)
    map_xy.append(msg.info.origin.position.y)
   
    for i in range(height):
@@ -88,6 +89,7 @@ def StartPose():
    start.orientation.w = pose.orientation.w
 
 def WaypointPose():
+   global count
    global state
    global start
    global waypoint
@@ -196,8 +198,6 @@ def Init_XY():
 
 def Calculation_XY():
    global q
-   global q1
-   global q2
    global x_y
    global map_state
 
@@ -208,7 +208,9 @@ def Calculation_XY():
    y_list = []
    state_list = []
    lists = []
-	
+
+   q1 = 0.7 * q
+   q2 = 0.65 * q
    print('--------------------------------------------------------------')
 
    for i in range(8):
@@ -243,7 +245,7 @@ def Calculation_XY():
      OccupancyMap(x1,y1)
      if map_state != 'free' :
         unknown += 1
-        if unknown == 7:
+        if unknown == 8:
            print('--------------------------------------------------------------')
            print('All unknown!!')
 	   quit()
@@ -264,24 +266,66 @@ def OccupancyMap(x,y):
    global map_xy
    global rows
    global map_state
+   global grid
+   global free
+   global occupancy
+
+   value = [0,0,0]
 
    x = int(20*math.sqrt((x-map_xy[0])**2))
    y = int(20*math.sqrt((y-map_xy[1])**2))
 
-   if rows[y][x] == 0:
-	map_state = 'free'
-   elif  rows[y][x] == 100 :
-	map_state = 'occupancy'
+   for i in range(grid):
+	for j in range(grid):
+	     if rows[y+i][x+j] == 0:
+		value[0] += 1
+	     elif rows[y+i][x+j] == 100:
+		value[1] += 1
+             else :
+		value[2] += 1
+	     if rows[y+i][x-j] == 0:
+		value[0] += 1
+	     elif rows[y+i][x-j] == 100:
+		value[1] += 1
+	     else :
+		value[2] += 1
+	     if rows[y-i][x+j] == 0:
+		value[0] += 1
+	     elif rows[y-i][x+j] == 100:
+		value[1] += 1
+	     else :
+		value[2] += 1
+	     if rows[y-i][x-j] == 0:
+		value[0] += 1
+	     elif rows[y-i][x-j] == 100:
+		value[1] += 1
+	     else :
+		value[2] += 1 
+        
+   v_sum = float(sum(value))
+   for i in range(3):
+	value[i] = round((value[i]/v_sum)*100,2)
 
-   print('  Grid(width,height)=({0},{1}) {2}' .format(x,y,map_state))
+   if  value[1] >= occupancy:
+	map_state = 'occupancy'
+   elif value[0] >= free:
+	map_state = 'free'
+   else :
+	map_state = 'unknown'
+
+   print('  free={0}%  occupancy={1}%  unknown={2}%' .format(value[0],value[1],value[2]))
+   print('  Grid(width,height)=({0},{1}) map_state:{2}' .format(x,y,map_state))
 
 def ChangeState(lists):
    global q
+   global grid
+   global free
+   global occupancy
    global state
    global passpoint
    global x_y
 	
-   p = state 
+   p = state
 
    for i in lists:
    	x_y[4] = min(i[3]) 
@@ -290,32 +334,57 @@ def ChangeState(lists):
    	x_y[1] = i[2][i[3].index(min(i[3]))]
     
    Update(p)
-      
-   if x_y[4] <= q : 
-      print('xy <= q : {0} <= {1}\n'.format(x_y[4],q))
+    
+   if x_y[4] <= q :
+      print('   xy <= q : {0} <= {1}\n'.format(x_y[4],q))
       if len(passpoint.poses) == 1 :
-	 print('--------------------------------------------------------------')
-	 print('\nGoal\n  (x,y,z)=({0},{1},0.0)\n  (x,y,w,z)=(0.0,0.0,{2},{3})\n'
-	.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
-   
-         file=open(sys.argv[1]+'_waypoint.json', 'a')
+ 	 file=open(sys.argv[1]+'_waypoint.json', 'a')
          file.write("\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]" 
-	.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
+				.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
          file.close()
-
-         print("Save "+sys.argv[1]+"_waypoint.json.....")
+         print('--------------------------------------------------------------')
+	 for i in range(3) :
+    		remove = raw_input("\nRemove? (y/n) ")
+    		if remove == 'y' :
+			while True :
+				removenum = raw_input("number: ")
+				if removenum == '':
+					break
+				else :
+					Number = int(removenum)
+					RemovePoint(Number)
+                        break
+    		elif remove == 'n' :
+			break
+		else :
+			print("Enter y or n!!\n")
+	 print('\n--------------------------------------------------------------')
+         print('\nGoal\n  (x,y,z)=({0},{1},0.0)\n  (x,y,w,z)=(0.0,0.0,{2},{3})\n'
+				.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
+	 print('\nq = {0}  grid = {1}  free = {2}%  occupancy = {3}%' .format(q,grid,free,occupancy))
+	 print("Save "+sys.argv[1]+"_waypoint.json.....")
          quit()
       else : 
          passpoint.poses.pop(0)
-	 print('--------------------------------------------------------------')
+         print('--------------------------------------------------------------')
          print('\nNext !!!!!!!!!!!\n')
-   else :
+   else :  
          print('   xy > q : {0} > {1}\n' .format(x_y[4],q))
 
+def RemovePoint(RemoveNum):
+    global state
+
+    with open(sys.argv[1]+'_waypoint.json','r') as f:
+    	waypointfile = json.load(f)
+	waypointfile.pop(RemoveNum)
+    with open(sys.argv[1]+'_waypoint.json','w') as f:
+	json.dump(waypointfile,f)  
+    print(' Remove waypoint {0}' .format(RemoveNum))
+
 def Update(p) :
-   ChangeAngle(p)
+   ChangeAngle(p) 
    WaypointPose() 
-   WriteFile()
+   WriteFile() 
    StartPose() 
    ArrowLabel()
 
@@ -374,8 +443,9 @@ def ChangeAngle(p_state):
 
 def SetUp():
    global q
-   global q1
-   global q2
+   global grid
+   global free
+   global occupancy
    global state
    
    if (len(sys.argv) < 2):
@@ -384,6 +454,11 @@ def SetUp():
         quit()
 
    os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide')
+   is_file = os.path.isfile(sys.argv[1]+'_waypoint.json')
+   if is_file :
+	answer = raw_input("Overwrite "+sys.argv[1]+"_waypoint.json? (y/n) ")
+        if answer == 'n':
+		quit()
 
    rospy.Subscriber('/map', OccupancyGrid,MapCallback)
    rospy.sleep(3.0)
@@ -394,10 +469,28 @@ def SetUp():
 
    print('\007')
 
-   q = 1.7
-   q1 = 0.7 * q
-   q2 = 0.65 * q
-	
+   param = raw_input('in or out or self ? ')
+   if param == 'in':
+   	q = 1.7
+        grid = 5
+        free = 90
+        occupancy = 30
+   elif param == 'out':
+        q = 4
+        grid = 15
+        free = 90
+        occupancy = 20
+   elif param == 'self':
+	print('[ex]in\n  q = 1.7\n  grid = 5\n  free = 90\n  occupancy = 30')
+        print('[ex]out\n  q = 4\n  grid = 15\n  free = 90\n  occupancy = 20')
+        print('self')
+	q = int(raw_input('  q= '))
+        grid = int(raw_input('  grid= '))
+        free = int(raw_input('  free= '))
+        occupancy = int(raw_input('  occupancy= '))
+   else :
+	quit()
+
    print('Make "Passpoints and Goal" with [2DNavGoal]')
    rospy.sleep(2.0)
    print('Put [Enter] to start "make waypoints"')
