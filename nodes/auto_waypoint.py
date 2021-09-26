@@ -17,12 +17,14 @@ grid = 0
 free = 0
 occupancy = 0
 count = 0
-
 state = None
 frame = None
 map_state = None
+
 rows = []
+lists = []
 map_xy = []
+past_state = []
 x_y = [0,0,0,0,0]
 
 start = Pose()
@@ -205,6 +207,7 @@ def Init_XY():
 
 def Calculation_XY():
    global q
+   global lists
    global x_y
    global map_state
 
@@ -214,7 +217,6 @@ def Calculation_XY():
    x_list = []
    y_list = []
    state_list = []
-   lists = []
 
    q1 = 0.7 * q
   
@@ -252,22 +254,21 @@ def Calculation_XY():
 	OccupancyMap(x1,y1)
 	if map_state != 'free' :
 		unknown += 1
+		if unknown >= 7:
+			print('--------------------------------------------------------------')
+			print('Can not proceed!!')
+			quit()
 		continue
-	if unknown >= 7:
-		print('--------------------------------------------------------------')
-		print('Can not proceed!!')
-		quit()
-     
+		
 	xy = math.sqrt(((x_y[2]-x1)**2)+((x_y[3]-y1)**2))
 	xy_list.append(xy)
 	x_list.append(x1)
 	y_list.append(y1)
 	state_list.append(t_state[i])
-	lists.append([state_list,x_list,y_list,xy_list])
-
 	print('  (x,y,z)=({0},{1},0.0)  dis={2}' .format(x1,y1,xy))
 	
-   ChangeState(lists)
+   lists.append([state_list,x_list,y_list,xy_list])
+   ChangeState()
 
 def OccupancyMap(x,y):
    global map_xy
@@ -328,24 +329,36 @@ def OccupancyMap(x,y):
    print('  free={0}%  occupancy={1}%  unknown={2}%' .format(value[0],value[1],value[2]))
    print('  Grid(width,height)=({0},{1}) map_state:{2}' .format(x,y,map_state))
 
-def ChangeState(lists):
+def ChangeState():
    global q
    global grid
    global free
    global occupancy
+   global count
    global state
-   global passpoint
+   global past_state
+   global lists
    global x_y
+   global passpoint
 	
-   p = state
+   past_state.append(state)
 
-   for i in lists:
-	x_y[4] = min(i[3]) 
-	state = i[0][i[3].index(min(i[3]))] 
-	x_y[0] = i[1][i[3].index(min(i[3]))]
-	x_y[1] = i[2][i[3].index(min(i[3]))]
-    
-   Update(p)
+   while True :
+		list = lists[count]
+		x_y[4] = min(list[3]) 
+		state = list[0][list[3].index(min(list[3]))] 
+		x_y[0] = list[1][list[3].index(min(list[3]))]
+		x_y[1] = list[2][list[3].index(min(list[3]))]
+		check = 1
+		C = ChangeAngle(check)
+		if C == 1 :
+			del list[0][list[3].index(min(list[3]))]
+			del list[1][list[3].index(min(list[3]))]
+			del list[2][list[3].index(min(list[3]))]
+			del list[3][list[3].index(min(list[3]))]
+		else :
+			break
+   Update()
     
    if x_y[4] <= q :
 	print('   xy <= q : {0} <= {1}\n'.format(x_y[4],q))
@@ -396,23 +409,23 @@ def RemovePoint(RemoveNum):
 	json.dump(waypointfile,f)  
     print(' Remove waypoint {0}' .format(RemoveNum))
 
-def Update(p) :
-   ChangeAngle(p) 
+def Update() :
+   check = 0
+   c = ChangeAngle(check) 
    WaypointPose() 
    WriteFile() 
    StartPose() 
    ArrowLabel()
 
-def ChangeAngle(p_state):
+def ChangeAngle(check):
    global state
-   global startGr
+   global start
+   global past_state
    global x_y
 
    angle = 0
    p_angle = 0
-
-   quaternion = start.orientation
-   euler = tf.transformations.euler_from_quaternion((quaternion.x, quaternion.y, quaternion.z, quaternion.w))
+   p_state = past_state[-1]
 
    if p_state == 'right' :
         p_angle = 0
@@ -431,7 +444,7 @@ def ChangeAngle(p_state):
    elif p_state == 'lower_left':
         p_angle = 0.75 
 
-   p = p_angle * math.pi 
+   yaw = p_angle * math.pi 
    
    if state == 'right' :
         angle = 0
@@ -450,11 +463,23 @@ def ChangeAngle(p_state):
    elif state == 'lower_left':
         angle = -0.75 
 
-   yaw = euler[2] + (angle * math.pi) + p
+   if check == 1 :
+	yaw = round(abs(angle * math.pi + yaw),2)
+	if yaw == 3.14 :
+		print('Delete\n')
+		return 1
+	else :
+		return 0
+	
+   quaternion = start.orientation
+   euler = tf.transformations.euler_from_quaternion((quaternion.x, quaternion.y, quaternion.z, quaternion.w))
+   yaw = euler[2] + (angle * math.pi) + yaw
 
    quaternion = tf.transformations.quaternion_from_euler(euler[0],euler[1],yaw)
    start.orientation.z = quaternion[2]
    start.orientation.w = quaternion[3]
+	
+   return 0
 
 def SetUp():
    global q
@@ -487,7 +512,6 @@ def SetUp():
    is_file = os.path.isfile(sys.argv[1]+'_waypoint.json')
    if is_file :
 	for i in range(3):
-		print('\007')
 		answer = raw_input('Overwrite '+sys.argv[1]+'_waypoint.json? (y/n) ')
 		if answer == 'y':
 			break		
