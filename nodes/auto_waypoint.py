@@ -17,6 +17,7 @@ grid = 0
 free = 0
 occupancy = 0
 count = 0
+p_count = 0
 state = None
 frame = None
 map_state = None
@@ -159,12 +160,11 @@ def ArrowLabel():
 	marker_data.text = str(count)
 	marker_data.id = count
 	count +=1
-
    marker_data.pose.position.x = pose.position.x
    marker_data.pose.position.y = pose.position.y
    marker_data.pose.orientation.z = pose.orientation.z
    marker_data.pose.orientation.w = pose.orientation.w
-   
+ 
    label.markers.append(marker_data)
    pub.publish(label)
 
@@ -172,21 +172,36 @@ def WriteFile():
    global count
    global state
    global start
+   global frame
+   global map_xy
    global waypoint
    global passpoint
 
    if state == 'start' :
-	pose = start
+	x = start.position.x
+   	y = start.position.y
+   	z = start.orientation.z
+   	w = start.orientation.w
+
+	file=open(sys.argv[1]+'_waypoint.json', 'w')
+   	file.write('[\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]],'.format(x,y,z,w))
    else :
-	pose = waypoint.poses[count]
-     
-   x = pose.position.x
-   y = pose.position.y
-   z = pose.orientation.z
-   w = pose.orientation.w
-   
-   file=open(sys.argv[1]+'_waypoint.json', 'a')
-   file.write('\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]],'.format(x,y,z,w))
+	if frame == 'map' :
+		init_x = 0
+		init_y = 0
+	else :
+		init_x = map_xy[0]
+		init_y = map_xy[1]
+
+	file=open(sys.argv[1]+'_waypoint.json', 'a')
+	for i in range(count) :
+   		x = waypoint.poses[i].position.x + init_x
+   		y = waypoint.poses[i].position.y + init_y
+   		z = waypoint.poses[i].orientation.z
+   		w = waypoint.poses[i].orientation.w
+
+   		file.write('\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]],'.format(x,y,z,w))
+   	file.write('\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]'.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
    file.close()
 
 def Init_XY():
@@ -207,6 +222,9 @@ def Init_XY():
 
 def Calculation_XY():
    global q
+   global p_count
+   global count
+   global state
    global lists
    global x_y
    global map_state
@@ -218,7 +236,7 @@ def Calculation_XY():
    y_list = []
    state_list = []
 
-   q1 = 0.7 * q
+   q1 = 0.9 * q
   
    print('--------------------------------------------------------------')
 
@@ -255,9 +273,18 @@ def Calculation_XY():
 	if map_state != 'free' :
 		unknown += 1
 		if unknown >= 7:
-			print('--------------------------------------------------------------')
-			print('Can not proceed!!')
-			quit()
+			print('\n--------------------------------------------------------------')
+			print('Can not proceed and return !!')
+			print('--------------------------------------------------------------\n')
+			p_count += 1
+			if p_count == 5 :
+				quit()
+			waypoint.poses.pop(-1)
+			past_state.append(state)
+			count -= 2
+			state = None
+			StartPose()
+			return
 		continue
 		
 	xy = math.sqrt(((x_y[2]-x1)**2)+((x_y[3]-y1)**2))
@@ -340,22 +367,44 @@ def ChangeState():
    global lists
    global x_y
    global passpoint
+   global waypoint
 	
-   past_state.append(state)
+   if state == None :
+	count += 1
+	i = 0
+	while True :
+		if past_state[-1] == lists[count][0][i] :
+			del lists[count][0][i]
+			del lists[count][1][i]
+			del lists[count][2][i]
+			del lists[count][3][i]
+			past_state.pop(-1)
+			break
+		i += 1
+   else :
+	   past_state.append(state)
 
+   list = lists[count]
    while True :
-		list = lists[count]
-		x_y[4] = min(list[3]) 
 		state = list[0][list[3].index(min(list[3]))] 
 		x_y[0] = list[1][list[3].index(min(list[3]))]
 		x_y[1] = list[2][list[3].index(min(list[3]))]
+		x_y[4] = min(list[3])
 		check = 1
-		C = ChangeAngle(check)
-		if C == 1 :
+		check = ChangeAngle(check)
+		if check == 1 and len(list[0]) >= 2:
+			print('\n--------------------------------------------------------------')
+			print('Delete {0}' .format(list[0][list[3].index(min(list[3]))]))
+			print('--------------------------------------------------------------')
 			del list[0][list[3].index(min(list[3]))]
 			del list[1][list[3].index(min(list[3]))]
 			del list[2][list[3].index(min(list[3]))]
 			del list[3][list[3].index(min(list[3]))]
+		elif check == 1 and len(list[0]) <= 1:
+			print('\n--------------------------------------------------------------')
+			print('Can not proceed!!')
+			print('--------------------------------------------------------------\n')
+			quit()
 		else :
 			break
    Update()
@@ -363,10 +412,6 @@ def ChangeState():
    if x_y[4] <= q :
 	print('   xy <= q : {0} <= {1}\n'.format(x_y[4],q))
 	if len(passpoint.poses) == 1 :
-		file=open(sys.argv[1]+'_waypoint.json', 'a')
-		file.write('\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]' 
-				.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
-		file.close()
 		print('--------------------------------------------------------------')
 		for i in range(3) :
   			remove = raw_input('\nRemove? (y/n) ')
@@ -376,18 +421,20 @@ def ChangeState():
 					if removenum == '':
 						break
 					else :
-						Number = int(removenum)
-						RemovePoint(Number)
+						waypoint.poses.pop(int(removenum))
+						count -= 1
+   						print(' Remove waypoint {0}' .format(removenum))
 				break
 			elif remove == 'n' :
-				break
+				 break
 			else :
 				if i == 2 :
 					quit()
 				print('Enter y or n!!\n')
 
+		WriteFile()
 		print('\n--------------------------------------------------------------')
-		print('\nGoal\n  (x,y,z)=({0},{1},0.0)\n  (x,y,w,z)=(0.0,0.0,{2},{3})\n'
+		print('\nGoal\n  (x,y,z)=({0},{1},0.0)\n  (x,y,w,z)=(0.0,0.0,{2},{3})'
 				.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
 		print('\nq = {0}  grid = {1}  free = {2}%  occupancy = {3}%' .format(q,grid,free,occupancy))
 		print('Save '+sys.argv[1]+'_waypoint.json.....')
@@ -399,21 +446,10 @@ def ChangeState():
    else :  
 	print('   xy > q : {0} > {1}\n' .format(x_y[4],q))
 
-def RemovePoint(RemoveNum):
-    global state
-
-    with open(sys.argv[1]+'_waypoint.json','r') as f:
-	waypointfile = json.load(f)
-	waypointfile.pop(RemoveNum)
-    with open(sys.argv[1]+'_waypoint.json','w') as f:
-	json.dump(waypointfile,f)  
-    print(' Remove waypoint {0}' .format(RemoveNum))
-
 def Update() :
    check = 0
-   c = ChangeAngle(check) 
+   check = ChangeAngle(check) 
    WaypointPose() 
-   WriteFile() 
    StartPose() 
    ArrowLabel()
 
@@ -466,7 +502,6 @@ def ChangeAngle(check):
    if check == 1 :
 	yaw = round(abs(angle * math.pi + yaw),2)
 	if yaw == 3.14 :
-		print('Delete\n')
 		return 1
 	else :
 		return 0
@@ -526,18 +561,14 @@ def SetUp():
    rospy.Subscriber('/map', OccupancyGrid,MapCallback)
    rospy.sleep(3.0)
 
-   file=open(sys.argv[1]+'_waypoint.json', 'w')
-   file.write('[')
-   file.close()
-
    for i in range(3):
 	print('\007')
    	param = raw_input('in or out or self ? ')
    	if param == 'in':
    		q = 1.7
         	grid = 5
-        	free = 80
-		occupancy = 20
+        	free = 60
+		occupancy = 10
 		break
    	elif param == 'out':
         	q = 4
@@ -549,10 +580,20 @@ def SetUp():
 		print('[ex]in\n  q = 1.7\n  grid = 5\n  free = 90\n  occupancy = 30')
         	print('[ex]out\n  q = 4\n  grid = 15\n  free = 90\n  occupancy = 20')
         	print('self')
-		q = int(raw_input('  q= '))
-        	grid = int(raw_input('  grid= '))
-        	free = int(raw_input('  free= '))
-        	occupancy = int(raw_input('  occupancy= '))
+		q = float(raw_input('  q= '))
+		while True :
+        		grid = float(raw_input('  grid= '))
+			if grid.is_integer() == True :
+				break
+			else :
+				print('*** grid is int ***')
+		while True :
+        		free = raw_input('  free= ')
+        		occupancy = raw_input('  occupancy= ')
+			if ( 0 <= int(free) and int(free) <= 100 ) and ( 0 <= int(occupancy) and int(occupancy) <= 100 ) :
+				break
+			else :
+				print('*** 0 <= free <= 100 and 0 <= occupancy <= 100 ***')
 		break
    	else :
 		if i == 2 :
