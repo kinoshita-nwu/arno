@@ -54,6 +54,40 @@ def PassCallback(data):
    passpoint.poses.append(pose)
    pub.publish(passpoint)
 
+def PassFileRead():
+   global passpoint
+   global frame
+   global map_xy
+
+   with open(sys.argv[1]+'_passpoint.json', 'r') as f:
+	passpointFile = json.load(f)
+   	for i in passpointFile :
+		pub = rospy.Publisher('passpoint', PoseArray, queue_size = 10)
+   		pose = Pose()
+
+		if frame == 'map' :
+			init_x = 0
+			init_y = 0
+		else :
+			init_x = map_xy[0]
+			init_y = map_xy[1]
+			
+   		pose.position.x = i[0][0] - init_x
+   		pose.position.y = i[0][1] - init_y
+		pose.position.z = i[0][2]
+		pose.orientation.x = i[1][0]
+   		pose.orientation.y = i[1][1]
+   		pose.orientation.z = i[1][2]
+   		pose.orientation.w = i[1][3]
+
+		passpoint.poses.append(pose)
+		print('[[{0},{1},0.0],[0.0,0.0,{2},{3}]]' 
+			.format(pose.position.x,pose.position.y,pose.orientation.z,pose.orientation.w))
+
+		passpoint.header.frame_id = frame
+		pub.publish(passpoint)
+		rospy.sleep(0.3)
+
 def MapCallback(msg):
    global map_xy
    global rows
@@ -177,6 +211,13 @@ def WriteFile():
    global waypoint
    global passpoint
 
+   if frame == 'map' :
+	init_x = 0
+	init_y = 0
+   else :
+	init_x = map_xy[0]
+	init_y = map_xy[1]
+
    if state == 'start' :
 	x = start.position.x
    	y = start.position.y
@@ -184,15 +225,8 @@ def WriteFile():
    	w = start.orientation.w
 
 	file=open(sys.argv[1]+'_waypoint.json', 'w')
-   	file.write('[\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]],'.format(x,y,z,w))
+   	file.write('[\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]],'.format(x + init_x,y + init_y,z,w))
    else :
-	if frame == 'map' :
-		init_x = 0
-		init_y = 0
-	else :
-		init_x = map_xy[0]
-		init_y = map_xy[1]
-
 	file=open(sys.argv[1]+'_waypoint.json', 'a')
 	for i in range(count) :
    		x = waypoint.poses[i].position.x + init_x
@@ -201,7 +235,8 @@ def WriteFile():
    		w = waypoint.poses[i].orientation.w
 
    		file.write('\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]],'.format(x,y,z,w))
-   	file.write('\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]'.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
+   	file.write('\n[[{0},{1},0.0],[0.0,0.0,{2},{3}]]\n]'
+		.format(goal.position.x + init_x,goal.position.y + init_y,goal.orientation.z,goal.orientation.w))
    file.close()
 
 def Init_XY():
@@ -273,6 +308,11 @@ def Calculation_XY():
 	if map_state != 'free' :
 		unknown += 1
 		if unknown >= 7:
+			if count == 0 :
+				print('\n--------------------------------------------------------------')
+				print('You must change q, grid, free and occupancy.')
+				print('--------------------------------------------------------------')
+				quit()
 			print('\n--------------------------------------------------------------')
 			print('Can not proceed and return !!')
 			print('--------------------------------------------------------------\n')
@@ -524,93 +564,101 @@ def SetUp():
    global state
    global frame
    
+   param_in = [1.7,3,74.2,33.2]
+   param_out = [4,30,80,5]
+
    if (len(sys.argv) < 2):
 	print('\007')
         print('Usage ' + sys.argv[0] + ' fileName ')
         quit()
 
-   for i in range(3):
+   while True :
 	print('\007')
-	robot = raw_input('With robot ? (y/n) ')
-	if robot == 'y' :
+	Q = raw_input('With robot ? (y/n) ')
+	if Q == 'y' :
 		frame = 'map'
 		break
-	elif robot == 'n' :
+	elif Q == 'n' :
 		frame = 'base_link'
 		break
 	else :
-		if i == 2 :
-			quit()
 		print('Enter y or n.')
 
-   os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide')
+   os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide/test')
    is_file = os.path.isfile(sys.argv[1]+'_waypoint.json')
    if is_file :
-	for i in range(3):
-		answer = raw_input('Overwrite '+sys.argv[1]+'_waypoint.json? (y/n) ')
-		if answer == 'y':
+	while True :
+		Q = raw_input('Overwrite '+sys.argv[1]+'_waypoint.json? (y/n) ')
+		if Q == 'y':
 			break		
-		elif answer == 'n':
+		elif Q == 'n':
 			quit()
 		else:
-			if i== 2 :
-				quit()
 			print('Enter y or n.')
 
    print('wait.....')
    rospy.Subscriber('/map', OccupancyGrid,MapCallback)
    rospy.sleep(3.0)
 
-   for i in range(3):
+   while True :
 	print('\007')
-   	param = raw_input('in or out or self ? ')
-   	if param == 'in':
-   		q = 1.7
-        	grid = 5
-        	free = 60
-		occupancy = 10
+   	Q = raw_input('in or out or self ? ')
+   	if Q == 'in':
+   		q = param_in[0]
+        	grid = param_in[1]
+        	free = param_in[2]
+		occupancy = param_in[3]
 		break
-   	elif param == 'out':
-        	q = 4
-        	grid = 30
-        	free = 80
-        	occupancy = 5
+   	elif Q == 'out':
+        	q = param_out[0]
+        	grid = param_out[1]
+        	free = param_out[2]
+        	occupancy = param_out[3]
 		break
-   	elif param == 'self':
-		print('[ex]in\n  q = 1.7\n  grid = 5\n  free = 90\n  occupancy = 30')
-        	print('[ex]out\n  q = 4\n  grid = 15\n  free = 90\n  occupancy = 20')
+   	elif Q == 'self':
+		print('[ex]in\n  q = {0}\n  grid = {1}\n  free = {2}\n  occupancy = {3}' 
+			.format(param_in[0],param_in[1],param_in[2],param_in[3]))
+        	print('[ex]out\n  q = {0}\n  grid = {1}\n  free = {2}\n  occupancy = {3}' 
+			.format(param_out[0],param_out[1],param_out[2],param_out[3]))
         	print('self')
 		q = float(raw_input('  q= '))
 		while True :
         		grid = float(raw_input('  grid= '))
 			if grid.is_integer() == True :
+				grid = int(grid)
 				break
 			else :
 				print('*** grid is int ***')
 		while True :
-        		free = raw_input('  free= ')
-        		occupancy = raw_input('  occupancy= ')
-			if ( 0 <= int(free) and int(free) <= 100 ) and ( 0 <= int(occupancy) and int(occupancy) <= 100 ) :
+        		free = float(raw_input('  free= '))
+        		occupancy = float(raw_input('  occupancy= '))
+			if ( 0 <= free and free <= 100 ) and ( 0 <= occupancy and occupancy <= 100 ) :
 				break
 			else :
 				print('*** 0 <= free <= 100 and 0 <= occupancy <= 100 ***')
 		break
    	else :
-		if i == 2 :
-			quit()
 		print('Enter y or n.')
 
-   print('Make Passpoints and Goal with [2DNavGoal]')
-   rospy.sleep(2.0)
-   print('Put [Enter] to start make waypoints')
-   rospy.Subscriber('/move_base/goal',MoveBaseActionGoal,PassCallback)
-   rospy.sleep(0.1)
+   while True :
+	Q = raw_input('Read passpoint file ? (y/n) ')
+	if Q == 'y' :
+		PassFileRead()
+		break
+	elif Q == 'n' :
+   		print('\nMake Passpoints and Goal with [2DNavGoal]')
+   		rospy.sleep(2.0)
+   		print('Put [Enter] to start make waypoints')
+   		rospy.Subscriber('/move_base/goal',MoveBaseActionGoal,PassCallback)
+   		rospy.sleep(0.1)
+		end = raw_input()
+   		if not end:
+			break
+	else :
+		print('Enter y or n.')
 
-   end = raw_input()
-   if not end:
-        state = 'goal'
-	GoalPose() 
- 
+   state = 'goal'
+   GoalPose()
    ArrowLabel() 
    
 if __name__ == '__main__':
@@ -630,6 +678,7 @@ if __name__ == '__main__':
    
    print('\nStart\n  (x,y,z)=({0},{1},0.0)\n  (x,y,w,z)=(0.0,0.0,{2},{3})\n'
          .format(start.position.x,start.position.y,start.orientation.z,start.orientation.w))
+   rospy.sleep(2.0)
    
    while not rospy.is_shutdown() :
 	Init_XY()
