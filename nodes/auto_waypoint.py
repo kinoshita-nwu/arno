@@ -16,6 +16,7 @@ q = 0
 grid = 0
 free = 0
 occupancy = 0
+direction = 0
 count = 0
 p_count = 0
 state = None
@@ -25,8 +26,9 @@ map_state = None
 rows = []
 lists = []
 map_xy = []
+t_state = []
 past_state = []
-x_y = [0,0,0,0,0]
+x_y = [0] * 5
 
 start = Pose()
 goal = Pose()
@@ -258,56 +260,91 @@ def Init_XY():
 def Calculation_XY():
    global q
    global p_count
+   global free
+   global occupancy
+   global direction
    global count
    global state
    global lists
    global x_y
+   global t_state
    global map_state
 
    unknown = 0
-   t_state = ['right','left','up','down','upper_right','upper_left','lower_right','lower_left']
+   t_state = ['right','left','up','down',
+		'upper_right','lower_right','upper_left','lower_left',
+		'right_upper_right','right_lower_right',
+		'left_upper_left','left_lower_left',
+		'upper_upper_right','lower_lower_right',
+		'upper_upper_left','lower_lower_left']
+
    xy_list = []
    x_list = []
    y_list = []
    state_list = []
 
-   q1 = 0.9 * q
+   q0 = 0.5 * q
+   q1 = 1.3 *q
   
    print('--------------------------------------------------------------')
 
-   for i in range(8):
+   for i in range(direction):
 	x1 = x_y[0]
 	y1 = x_y[1]
 	x2 = x_y[2]
 	y2 = x_y[3]
        
 	if t_state[i] == 'right' :
+		x1 += q1
+	elif t_state[i] == 'right_upper_right' :
 		x1 += q
-	elif t_state[i] == 'left' :
-		x1 -= q
-	elif t_state[i] == 'up' :
-		y1 += q
-	elif t_state[i] == 'down' :
-		y1 -= q
+		y1 += q0
 	elif t_state[i] == 'upper_right' :
-		x1 += q1
+		x1 += q
+		y1 += q
+	elif t_state[i] == 'upper_upper_right' :
+		x1 += q0
+		y1 += q
+	elif t_state[i] == 'up' :
 		y1 += q1
-	elif t_state[i] == 'lower_right' :
-		x1 += q1
-		y1 -= q1
+	elif t_state[i] == 'upper_upper_left' :
+		x1 -= q0
+		y1 += q
 	elif t_state[i] == 'upper_left' :
+		x1 -= q
+		y1 += q
+	elif t_state[i] == 'left_upper_left' :
+		x1 -= q
+		y1 += q0
+	elif t_state[i] == 'left' :
 		x1 -= q1
-		y1 += q1
-	elif t_state[i] == 'lower_left':
-		x1 -= q1
+	elif t_state[i] == 'left_lower_left' :
+		x1 -= q
+		y1 -= q0
+	elif t_state[i] == 'lower_left' :
+		x1 -= q
+		y1 -= q
+	elif t_state[i] == 'lower_lower_left' :
+		x1 -= q0
+		y1 -= q
+	elif t_state[i] == 'down' :
 		y1 -= q1
+	elif t_state[i] == 'lower_lower_right' :
+		x1 += q0
+		y1 -= q
+	elif t_state[i] == 'lower_right' :
+		x1 += q
+		y1 -= q
+	elif t_state[i] == 'right_lower_right' :
+		x1 += q
+		y1 -= q0
   
 	print(' {0}' .format(t_state[i]))
 	
 	OccupancyMap(x1,y1)
 	if map_state != 'free' :
 		unknown += 1
-		if unknown >= 7:
+		if unknown >= 15:
 			if count == 0 :
 				print('\n--------------------------------------------------------------')
 				print('You must change q, grid, free and occupancy.')
@@ -317,8 +354,12 @@ def Calculation_XY():
 			print('Can not proceed and return !!')
 			print('--------------------------------------------------------------\n')
 			p_count += 1
-			if p_count == 5 :
-				quit()
+			if p_count == 2 :
+				free -= 10
+				occupancy -= 1
+				if free <= 40 or occupancy <= 0 :
+					quit()
+				p_count = 0
 			waypoint.poses.pop(-1)
 			past_state.append(state)
 			count -= 2
@@ -346,7 +387,7 @@ def OccupancyMap(x,y):
    global free
    global occupancy
 
-   value = [0,0,0]
+   value = [0] * 3
 
    if frame == 'base_link':
 	x = int(20*x)
@@ -478,6 +519,7 @@ def ChangeState():
 				.format(goal.position.x,goal.position.y,goal.orientation.z,goal.orientation.w))
 		print('\nq = {0}  grid = {1}  free = {2}%  occupancy = {3}%' .format(q,grid,free,occupancy))
 		print('Save '+sys.argv[1]+'_waypoint.json.....')
+		CountState()
 		quit()
 	else : 
 		passpoint.poses.pop(0)
@@ -505,39 +547,71 @@ def ChangeAngle(check):
 
    if p_state == 'right' :
         p_angle = 0
-   elif p_state == 'left' :
-        p_angle = 1
-   elif p_state == 'up' :
-        p_angle = -0.5
-   elif p_state == 'down' :
-        p_angle = 0.5
+   elif p_state == 'right_upper_right' :
+        p_angle = -0.16
    elif p_state == 'upper_right' :
         p_angle = -0.25 
-   elif p_state == 'lower_right' :
-        p_angle = 0.25
+   elif p_state == 'upper_upper_right' :
+        p_angle = -0.33
+   elif p_state == 'up' :
+        p_angle = -0.5
+   elif p_state == 'upper_upper_left' :
+        p_angle = -0.67
    elif p_state == 'upper_left' :
         p_angle = -0.75
+   elif p_state == 'left_upper_left' :
+        p_angle = -0.83
+   elif p_state == 'left' :
+        p_angle = 1
+   elif p_state == 'left_lower_left' :
+        p_angle = 0.83
    elif p_state == 'lower_left':
-        p_angle = 0.75 
+        p_angle = 0.75
+   elif p_state == 'lower_lower_left':
+        p_angle = 0.67
+   elif p_state == 'down' :
+        p_angle = 0.5
+   elif p_state == 'lower_lower_right':
+        p_angle = 0.33
+   elif p_state == 'lower_right' :
+        p_angle = 0.25 
+   elif p_state == 'right_lower_right':
+        p_angle = 0.16
 
    yaw = p_angle * math.pi 
    
    if state == 'right' :
         angle = 0
-   elif state == 'left' :
-        angle = 1
-   elif state == 'up' :
-        angle = 0.5
-   elif state == 'down' :
-        angle = -0.5
+   elif state == 'right_upper_right' :
+        angle = 0.16
    elif state == 'upper_right' :
         angle = 0.25 
-   elif state == 'lower_right' :
-        angle = -0.25
+   elif state == 'upper_upper_right' :
+        angle = 0.33
+   elif state == 'up' :
+        angle = 0.5
+   elif state == 'upper_upper_left' :
+        angle = 0.67
    elif state == 'upper_left' :
-        angle = 0.75 
+        angle = 0.75
+   elif state == 'left_upper_left' :
+        angle = 0.83
+   elif state == 'left' :
+        angle = 1
+   elif state == 'left_lower_left' :
+        angle = -0.83
    elif state == 'lower_left':
-        angle = -0.75 
+        angle = -0.75
+   elif state == 'lower_lower_left':
+        angle = -0.67
+   elif state == 'down' :
+        angle = -0.5
+   elif state == 'lower_lower_right':
+        angle = -0.33
+   elif state == 'lower_right' :
+        angle = -0.25 
+   elif state == 'right_lower_right':
+        angle = -0.16
 
    if check == 1 :
 	yaw = round(abs(angle * math.pi + yaw),2)
@@ -556,21 +630,56 @@ def ChangeAngle(check):
 	
    return 0
 
+def CountState():
+   global direction
+   global past_state
+   global t_state
+   global count
+
+   st_count = [0] * direction
+
+   for i in past_state :
+	for j in range(direction) :
+		if i == t_state[j] :
+			st_count[j] += 1
+			break
+
+   if direction >= 9 :
+	rjust = 17
+   elif direction >= 5 :
+	rjust = 11
+   else :
+	rjust = 5
+
+   print('\n--------------------------------------------------------------\n')
+   for i in range(direction) :
+	a = round(st_count[i]/float(len(past_state))*100,3)
+	print('{0}:{1}  {2}%' .format(t_state[i].rjust(rjust),st_count[i],a))
+   print('\n--------------------------------------------------------------')
+
 def SetUp():
    global q
    global grid
    global free
    global occupancy
+   global direction
    global state
    global frame
    
-   param_in = [1.7,3,74.2,33.2]
-   param_out = [4,30,80,5]
+   param_in = [1.5,30,70,30]
+   param_out = [4,30,70,30]
 
-   if (len(sys.argv) < 2):
+   if (len(sys.argv) < 3):
 	print('\007')
-        print('Usage ' + sys.argv[0] + ' fileName ')
+        print('Usage : rosrun arno auto_waypoint.py [fileName] [Number_of_directions]')
         quit()
+
+   direction = int(sys.argv[2])
+   if direction <= 3 or direction >= 17 :
+	print(type(direction))
+	print('\007')
+	print('*** 4 <= directions <= 16 ***')
+	quit()
 
    while True :
 	print('\007')
