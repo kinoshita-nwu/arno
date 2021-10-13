@@ -65,7 +65,7 @@ def WriteYAML(msg):
 
 def WritePGM(): 
    file=open(sys.argv[1]+'.pgm', 'w')
-   file.write(rows[0]+'\n'+str(rows[1][0])+' '+str(rows[1][1])+'\n')
+   file.write(rows[0]+'\n'+str(rows[1][0])+' '+str(rows[1][1])+'\n'+rows[2]+'\n')
    for i in range(height):
 	for j in range(width):
 		file.write(str(rows[-1-i][j])+' ')
