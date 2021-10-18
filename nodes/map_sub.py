@@ -7,6 +7,7 @@ from nav_msgs.msg import OccupancyGrid
 
 width = 0
 height = 0
+occupancy = 0
 mode = None
 rows = []
 
@@ -24,6 +25,7 @@ def mapCallback(msg):
    height = msg.info.height
 
    print('\nwidth:{0}\nheight:{1}\n' .format(width,height))
+   print('wait...')
 
    rows.append('P2')
    rows.append([width,height])
@@ -41,8 +43,8 @@ def mapCallback(msg):
 	rows.append(row)
         row = []
    
-   print('wait...')
    WriteYAML(msg)
+   print('\nwait...')
    if mode == sys.argv[1]+'_remake' :
 	RemakeMap()
    #PrintScreen()
@@ -64,11 +66,13 @@ def WriteYAML(msg):
    print('Make '+mode+'.yaml')
 
 def RemakeMap():
+   global occupancy
+
    for i in range(height):
 	for j in range(width):
 		if rows[i+3][j] == 0 :
-			for k in range(5) :
-				for l in range(5) :
+			for k in range(occupancy) :
+				for l in range(occupancy) :
 					if rows[i+k+1][j+l-1] == 15:
 						rows[i+k+1][j+l-1] = 2
 
@@ -93,8 +97,9 @@ def WritePGM():
 
    print('Make '+mode+'.pgm')
 
-if __name__ == '__main__':
-   rospy.init_node('map_sub')
+def SetUp():
+   global occupancy
+   global mode
 
    if (len(sys.argv) < 2):
         print("\007Usage: rosrun arno map_remake.py fileName ")
@@ -107,6 +112,20 @@ if __name__ == '__main__':
 		break
 	elif Q == 'r':
 		mode = sys.argv[1]+'_remake'
+		while True :
+			Q = raw_input('in or out or self? (in/out/self) ')
+			if Q == 'in' :
+				occupancy = 3
+				break
+			elif Q == 'out' :
+				occupancy = 10
+				break
+			elif Q == 'self' :
+				print('ex)in...3   out...10')
+				occupancy = int(raw_input('occupancy expansion width? \nself... '))
+				break
+			else :
+				print('\007Enter in, out or self.')
 		break
 	else:
 		print('\007Enter c or r.')
@@ -115,17 +134,22 @@ if __name__ == '__main__':
    is_file = os.path.isfile(mode+'.pgm')
    if is_file :
 	while True :
-		Q = raw_input('\007Overwrite '+mode+'.pgm? (y/n) ')
+		Q = raw_input('\n\007Overwrite '+mode+'.pgm? (y/n) ')
 		if Q == 'y':
 			break		
 		elif Q == 'n':
 			quit()
 		else:
 			print('\007Enter y or n.')
+			
+if __name__ == '__main__':
+   rospy.init_node('map_sub')
+
+   SetUp()
 
    rospy.Subscriber('/map', OccupancyGrid,mapCallback)
    if height >= 5000 :
-   	rospy.sleep(7.0)
+   	rospy.sleep(10.0)
    else :
 	rospy.sleep(3.0)
    WritePGM()
