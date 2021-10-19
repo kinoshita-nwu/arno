@@ -86,9 +86,12 @@ if __name__ == '__main__':
                 print("dis =  "+str((position[0]-goal.target_pose.pose.position.x)**2 + (position[1]-goal.target_pose.pose.position.y)**2 ))
                 print("rad = "+str(angle_dif(goal_euler[2], euler[2])))
                 client.wait_for_result(rospy.Duration(0.1))
-                if (math.sqrt((position[0]-goal.target_pose.pose.position.x)**2 + (position[1]-goal.target_pose.pose.position.y)**2 ) <= xy_tolerance) or (client.get_result()):
+                if (math.sqrt((position[0]-goal.target_pose.pose.position.x)**2 + (position[1]-goal.target_pose.pose.position.y)**2 ) <= xy_tolerance):
                     print("next!!")
                     break
+                elif (client.get_result()):
+                    # resend goal potision
+                    client.send_goal(goal)
 #                else:
 #                     rospy.sleep(0.5)
 
