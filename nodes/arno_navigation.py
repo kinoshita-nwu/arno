@@ -53,7 +53,6 @@ def angle_dif(target, current):
 if __name__ == '__main__':
     rospy.init_node('arno_navigation')
     pub = rospy.Publisher('waypoints', PoseArray, queue_size=10)
-    yo_tolerance = rospy.get_param('move_base/DWAPlannerROS/yaw_goal_tolerance')
     xy_tolerance = rospy.get_param('move_base/DWAPlannerROS/xy_goal_tolerance')
     if (len(sys.argv) < 2):
         print("Usage " + sys.argv[0] + " fileName")
@@ -81,16 +80,17 @@ if __name__ == '__main__':
                 listener.waitForTransform("map", "base_link", now, rospy.Duration(4.0))
 
                 position, quaternion = listener.lookupTransform("map", "base_link", now)
-                euler = tf.transformations.euler_from_quaternion((quaternion[0], quaternion[1], quaternion[2], quaternion[3]))
-                goal_euler = tf.transformations.euler_from_quaternion((goal.target_pose.pose.orientation.x, goal.target_pose.pose.orientation.y, goal.target_pose.pose.orientation.z, goal.target_pose.pose.orientation.w))
-                print("dis =  "+str((position[0]-goal.target_pose.pose.position.x)**2 + (position[1]-goal.target_pose.pose.position.y)**2 ))
-                print("rad = "+str(angle_dif(goal_euler[2], euler[2])))
+                remaindXDist = position[0] - goal.target_pose.pose.position.x
+                remaindYDist = position[1] - goal.target_pose.pose.position.y
                 client.wait_for_result(rospy.Duration(0.1))
-                if (math.sqrt((position[0]-goal.target_pose.pose.position.x)**2 + (position[1]-goal.target_pose.pose.position.y)**2 ) <= xy_tolerance):
+                if (math.sqrt(remaindXDist**2 + remaindYDist**2) <= xy_tolerance):
                     print("next!!")
                     break
                 elif (client.get_result()):
                     # resend goal potision
+                    print("send Fixed goal position!!")
+                    goal.target_pose.pose.position.x += remaindXDist
+                    goal.target_pose.pose.position.y += remaindYDist
                     client.send_goal(goal)
 #                else:
 #                     rospy.sleep(0.5)
