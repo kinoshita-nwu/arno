@@ -41,11 +41,16 @@ def rewriteMarker():
 def updateWaypointjson():
     file=open('_waypoint.json', 'w')
     file.write("[\n")
-    for pose in waypoints.poses:
-        file.write("    [[{0},{1},0.0],[0.0,0.0,{2},{3}]],\n".format(pose.position.x,pose.position.y,pose.orientation.z,pose.orientation.w))
+    for (n,pose) in enumerate(waypoints.poses):
+        file.write("    [[{0},{1},0.0],[0.0,0.0,{2},{3}]]{4}\n".format(pose.position.x,pose.position.y,pose.orientation.z,pose.orientation.w, "," if n<len(waypoints.poses)-1 else ""))
     file.write("]")
     file.close()
 
+def printWaypoints():
+    print("[")
+    for pose in waypoints.poses:
+        print("    [[{0},{1},0.0],[0.0,0.0,{2},{3}]],".format(pose.position.x,pose.position.y,pose.orientation.z,pose.orientation.w))
+    print("]")
 def printWaypoints():
     print("[")
     for pose in waypoints.poses:
