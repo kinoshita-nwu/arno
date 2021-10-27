@@ -2,7 +2,7 @@
 
 import rospy
 import tf
-import os
+import signal, os
 import sys
 import math
 import json
@@ -152,7 +152,7 @@ def Question():
 	else :
 		print('Enter way or pass.')
 
-   os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide')
+   os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide/1023_nakanoshima')
    is_file = os.path.isfile(sys.argv[1]+file_name)
 
    if is_file:
@@ -199,6 +199,13 @@ def Question():
 
    print('\n[Start make{0}] Dif1 = {1} , Dif2 = {2}' .format(file_name,Dif1,Dif2))
 
+global _ctrlc_pressed
+_ctrlc_pressed = False
+
+def int_handler(signum, frame):
+	_ctrlc_pressed = True
+signal.signal(signal.SIGINT, int_handler)
+
 if __name__ == '__main__':
    rospy.init_node('arno_position')
    listener = tf.TransformListener()
@@ -219,7 +226,8 @@ if __name__ == '__main__':
    write = 'start'
    WriteFile()
 
-   while not rospy.is_shutdown() :
+
+   while not rospy.is_shutdown() and not _ctrlc_pressed:
 	now = rospy.Time.now()
 	listener.waitForTransform('map', 'base_link', now, rospy.Duration(4.0))
 	position, quaternion = listener.lookupTransform('map', 'base_link', now)
