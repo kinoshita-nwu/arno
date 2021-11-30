@@ -38,7 +38,7 @@ def load_file(fileName):
 		pose.orientation.w = line[1][3]
 		if len(waypoints.poses) == 0 :
 			set_initpose(pose)
-			waypoints.poses.append(pose)
+		waypoints.poses.append(pose)
 		if len(line) >= 3:
 			change_params.append(line[2])
 		else:
