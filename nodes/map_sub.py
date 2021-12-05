@@ -3,6 +3,8 @@
 import rospy
 import sys
 import os
+import json
+import math
 from nav_msgs.msg import OccupancyGrid
 
 width = 0
@@ -10,12 +12,14 @@ height = 0
 occupancy = 0
 mode = None
 rows = []
+map_xy = []
 
 def mapCallback(msg):
    global width
    global height
    global mode
    global rows
+   global map_xy
 
    count = 0
    row = []
@@ -23,6 +27,8 @@ def mapCallback(msg):
    data = msg.data
    width = msg.info.width
    height = msg.info.height
+   map_xy.append(msg.info.origin.position.x)
+   map_xy.append(msg.info.origin.position.y)
 
    print('\nwidth:{0}\nheight:{1}\n' .format(width,height))
    print('wait...')
@@ -47,6 +53,8 @@ def mapCallback(msg):
    print('\nwait...')
    if mode == sys.argv[1]+'_remake' :
 	RemakeMap()
+   elif mode == sys.argv[1]+'_foot' :
+        RemoveFootprint()
    #PrintScreen()
 
 def WriteYAML(msg):
@@ -75,6 +83,28 @@ def RemakeMap():
 				for l in range(occupancy) :
 					if rows[i+k+1][j+l-1] == 15:
 						rows[i+k+1][j+l-1] = 2
+
+def RemoveFootprint():
+   global rows
+   global map_xy
+   
+   count = 0
+   waypoint_file = sys.argv[1]+'_waypoint.json'
+   with open(waypoint_file, "r") as f:
+        waypointFile = json.load(f)
+        for line in waypointFile:
+            x = int(math.sqrt((line[0][0]-map_xy[0])**2) * 20)
+            y = int(math.sqrt((line[0][1]-map_xy[1])**2) * 20)
+	    count += 1
+	    #print('{0} x:{1} y:{2}'.format(count,x,y))
+	    for i in range(100):
+		for j in range(100):
+			if rows[y+i][x+j] == 0  :
+				rows[y+i][x+j] = 15
+	    for i in range(10):
+		for j in range(10):
+			if rows[y+i][x+j] == 11 :
+				rows[y+i][x+j] = 15
 
 def PrintScreen():
    print(rows[0])
@@ -106,11 +136,11 @@ def SetUp():
         quit()
 
    while True :
-	Q = raw_input('copy or remake? (c/r) ')
-	if Q == 'c':
+	Q = raw_input('copy or remake or remove_footprint ? (copy/remake/foot) ')
+	if Q == 'copy':
 		mode = sys.argv[1]+'_copy'
 		break
-	elif Q == 'r':
+	elif Q == 'remake':
 		mode = sys.argv[1]+'_remake'
 		while True :
 			Q = raw_input('in or out or self? (in/out/self) ')
@@ -127,8 +157,11 @@ def SetUp():
 			else :
 				print('\007Enter in, out or self.')
 		break
+        elif Q == 'foot':
+            mode = sys.argv[1]+'_foot'
+            break
 	else:
-		print('\007Enter c or r.')
+		print('\007Enter copy or remake or foot.')
 
    os.chdir('/home/hokuyo/catkin_ws/src/arno/map/nide/kino')
    is_file = os.path.isfile(mode+'.pgm')
